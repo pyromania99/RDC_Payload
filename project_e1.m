@@ -13,15 +13,15 @@ dh = [0, l1, 0, -pi/2; ...
       pi/2,0,0,pi/2;...
       0,l6,0,0];
 
-angle = [-pi/3,-pi/3,pi/4,0,0,pi/3];
+angle = [-pi/4,-pi/4,pi/4,0,0,0];
 
 figure(1);
 [pose,rotation] = plot(dh,angle)
 
-angle = [0,0,0,0,0,0];
-[pose2,rotation] = FK(dh,angle);
-scatter3(pose2(1,:),pose2(2,:), pose2(3,:), 'filled', 'MarkerEdgeColor', 'b', 'MarkerFaceColor', 'g');
-plot3(pose2(1,:),pose2(2,:), pose2(3,:), 'r-');
+angle = [-pi/4,-pi/4,pi/4,pi/2,pi/4,pi/3];
+[pose2,rotation] = plot(dh,angle)
+% scatter3(pose2(1,:),pose2(2,:), pose2(3,:), 'filled', 'MarkerEdgeColor', 'b', 'MarkerFaceColor', 'g');
+% plot3(pose2(1,:),pose2(2,:), pose2(3,:), 'r-');
 hold off; % Release the hold on the current plot
 
 % Customize the plot
@@ -55,7 +55,8 @@ ee(:,3) = pose(:,7);
 
 pose;rotation = plot(dh,angles(:,4)');
 ee(:,4) = pose(:,7);
-plot_sphere([2*sqrt(2),0,1],.2,'g')
+plot_sphere([0,0,0],.5,'y',0.1)
+plot_sphere([0,0,0],2.5,'y',0.1)
 hold off
 
 disp(ee);
@@ -105,6 +106,33 @@ for i = 1:length(t)
 
     end
 end
+
+%%
+%Velocity Kinematics
+% assigning first row to angular velocities and second row to linear velocities
+%jacobian is invariant to theta_dot
+
+theta = [0,0,0,0,0,0];
+
+
+figure(4);
+[pose,rotation] = plot(dh,theta)
+
+% der_jac(params);
+
+re_vel = [0,0,2];
+
+% theta_diff =  solver(theta(1),theta(2),theta(3),re_vel)
+
+% theta_dot = [theta_diff(1),theta_diff(2),theta_diff(3),0,0,0];
+theta_dot = [1,1,0,0,0,0];
+velocities = frame_velocity(dh,theta_dot,theta);
+
+% disp("first column is angular velocity and second is linear velocity corresponding to each frame")
+disp(double(velocities(:,:,:)));
+
+
+
 % Functions
 %----------------------------------------------------------------------------------------
 function [pose,rotation] = plot(dh,angle)
@@ -154,23 +182,22 @@ end
 %----------------------------------------------------------------------------------------
 function [poses,rotation] = FK(dh,angles)
 
-    frames = size(angles);
+    len = size(dh,1);
     j=1;
-    for i =1:frames(2)
-        if(i ~= 4 && i ~= 7)
+    for i =1:len
+        if(i ~= 4 && i~=6 && i ~= 7)
             dh(i,1) = angles(j);
             j = j+1;
         elseif (i == 6)
-            dh(i,1) = angles(j) +pi/2;
+            dh(i,1) = angles(j) + pi/2;
             j = j+1;
         else
             dh(i,1) = pi/2;
         end
     end
+
  T_mat = transformation(dh);
 
- len = size(dh);
- len = len(1);
  poses = zeros(4,6);
  net_transform = transformation([0,0,0,0]);
  end_pose = [0;0;0;1;];
@@ -275,4 +302,94 @@ else
     angle_set(:,4) = [theta_1_1, theta_2_4 ,theta_3_2];
 end
 
+end
+
+%--------------------------------------------------------------------------------------------
+function velocities = frame_velocity(dh,theta_dot,theta_vals)
+
+    DH = sym(dh);
+    theta_dot = [theta_dot(1),theta_dot(2),theta_dot(3),theta_dot(4),0,theta_dot(5),0,theta_dot(6)];
+    theta_vals = [theta_vals(1),theta_vals(2),theta_vals(3),theta_vals(4), pi/2,theta_vals(5)+pi/2,pi/2,theta_vals(6)];
+    
+    syms dtheta [1,8] real
+    syms theta [1,8] real
+    len = size(dh,1);
+
+    for i =1:len
+            DH(i,1) = theta(i);
+    end
+    
+    
+    T_mat = transformation(DH)
+    eqns = sym(zeros(3,2,len+1));
+% 3=> x,y,z ,2 => v,w , len+1 => for each joint
+
+% assigning first row to angular velocities and second row to linear velocities
+    for i=1:len+1
+        if i > 1
+            R = T_mat(1:3,1:3,i-1);
+            params = T_mat(1:3,4,i-1);
+            v_prev = eqns(:,2,i-1);
+            w_prev = eqns(:,1,i-1);
+        else
+            R = eye(3);
+            params = zeros(3,1);
+            v_prev = [0;0;0];
+            w_prev = [0;0;0]; 
+        end
+        if(i < len+1)
+        eqns(:,1,i) = R'*(w_prev) + dtheta(i)*[0;0;1];
+        else
+        eqns(:,1,i) = R'*(w_prev);
+        end
+        eqns(:,2,i) = R'*(v_prev + cross(w_prev,params));
+    end
+
+    velocities = subs(eqns,[dtheta,theta],[theta_dot,theta_vals]);
+end 
+%--------------------------------------------------------------------------------------
+function Jacobian = der_jac(params)
+
+l1 = params(1);
+l2 = params(2);
+l3 = params(3);
+l4 = params(4);
+
+syms theta1 theta2 theta3;
+
+% Define the equations
+x = -l2 * sin(theta1) + l3 * cos(theta1) * cos(theta2) + l4 * cos(theta1) * cos(theta2 + theta3);
+y = l2 * cos(theta1) + l3 * sin(theta1) * cos(theta2) + l4 * sin(theta1) * cos(theta2 + theta3);
+z = l1 - l3 * sin(theta2) - l4 * sin(theta2 + theta3);
+
+F = [x; y; z];
+
+% Create a vector of the three variables
+theta = [theta1; theta2; theta3];
+
+% Compute the Jacobian matrix
+Jacobian = jacobian(F, theta);
+
+% Display the Jacobian matrix
+disp('Jacobian Matrix:');
+disp(Jacobian);
+
+end
+
+function theta_diff = solver(theta1,theta2,theta3,re_vel)
+    
+    syms d1 d2 d3;
+
+    v_x = re_vel(1);
+    v_y = re_vel(2);
+    v_z = re_vel(3);
+
+    % jacobian = der_jac(params)
+    % replace left side of equations with the jacobian itself symbolically
+    eqn1 = v_x == (- (3*cos(theta2)*sin(theta1))/2 - cos(theta2 + theta3)*sin(theta1))*d1 +(- (3*cos(theta1)*sin(theta2))/2 - sin(theta2 + theta3)*cos(theta1))*d2 + (-sin(theta2 + theta3)*cos(theta1))*d3 ;
+    eqn2 = v_y == ((3*cos(theta1)*cos(theta2))/2 + cos(theta2 + theta3)*cos(theta1))*d1 + ( - sin(theta2 + theta3)*sin(theta1) - (3*sin(theta1)*sin(theta2))/2)*d2 + ( -sin(theta2 + theta3)*sin(theta1))*d3;
+    eqn3 = v_z == (- cos(theta2 + theta3) - (3*cos(theta2))/2)*d2  + (-cos(theta2 + theta3))*d3;
+ 
+    S = solve([eqn1,eqn2,eqn3],[d1 d2 d3]);
+    theta_diff = [S.d1,S.d2,S.d3];
 end
