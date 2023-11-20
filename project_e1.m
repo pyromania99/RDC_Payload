@@ -18,7 +18,7 @@ angle = [-pi/4,-pi/4,pi/4,0,0,0];
 figure(1);
 [pose,rotation] = plot(dh,angle)
 
-angle = [-pi/4,-pi/4,pi/4,pi/2,pi/4,pi/3];
+angle = [-pi/4,-pi/4,pi/4,pi/3,0,0];
 [pose2,rotation] = plot(dh,angle)
 % scatter3(pose2(1,:),pose2(2,:), pose2(3,:), 'filled', 'MarkerEdgeColor', 'b', 'MarkerFaceColor', 'g');
 % plot3(pose2(1,:),pose2(2,:), pose2(3,:), 'r-');
@@ -112,7 +112,7 @@ end
 % assigning first row to angular velocities and second row to linear velocities
 %jacobian is invariant to theta_dot
 
-theta = [0,0,0,0,0,0];
+theta = [0,pi/4,pi/4,0,0,0];
 
 
 figure(4);
@@ -120,12 +120,12 @@ figure(4);
 
 % der_jac(params);
 
-re_vel = [0,0,2];
+re_vel = [3,1,2];
 
-% theta_diff =  solver(theta(1),theta(2),theta(3),re_vel)
+theta_diff =  solver(theta(1),theta(2),theta(3),re_vel)
 
-% theta_dot = [theta_diff(1),theta_diff(2),theta_diff(3),0,0,0];
-theta_dot = [1,1,0,0,0,0];
+theta_dot = [theta_diff(1),theta_diff(2),theta_diff(3),0,0,0];
+% theta_dot = [1,0,1,1,0,3];
 velocities = frame_velocity(dh,theta_dot,theta);
 
 % disp("first column is angular velocity and second is linear velocity corresponding to each frame")
@@ -308,8 +308,8 @@ end
 function velocities = frame_velocity(dh,theta_dot,theta_vals)
 
     DH = sym(dh);
-    theta_dot = [theta_dot(1),theta_dot(2),theta_dot(3),theta_dot(4),0,theta_dot(5),0,theta_dot(6)];
-    theta_vals = [theta_vals(1),theta_vals(2),theta_vals(3),theta_vals(4), pi/2,theta_vals(5)+pi/2,pi/2,theta_vals(6)];
+    theta_dot = [theta_dot(1),theta_dot(2),theta_dot(3),0,theta_dot(4),theta_dot(5),0,theta_dot(6)];
+    theta_vals = [theta_vals(1),theta_vals(2),theta_vals(3),pi/2,theta_vals(4),theta_vals(5)+pi/2,pi/2,theta_vals(6)];
     
     syms dtheta [1,8] real
     syms theta [1,8] real
@@ -318,7 +318,6 @@ function velocities = frame_velocity(dh,theta_dot,theta_vals)
     for i =1:len
             DH(i,1) = theta(i);
     end
-    
     
     T_mat = transformation(DH)
     eqns = sym(zeros(3,2,len+1));
